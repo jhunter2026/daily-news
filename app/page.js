@@ -42,17 +42,27 @@ async function fetchAndSaveHeadlines() {
 }
 
 async function getStoredHeadlines() {
-  const { data, error } = await supabase
-    .from('headlines')
-    .select('*')
-    .order('pub_date', { ascending: false })
-    .limit(20);
+  const results = [];
 
-  if (error) {
-    return { data: [], error: error.message };
+  for (const feed of FEEDS) {
+    const { data, error } = await supabase
+      .from('headlines')
+      .select('*')
+      .eq('source', feed.source)
+      .order('pub_date', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      return { data: [], error: `Error reading ${feed.source}: ${error.message}` };
+    }
+
+    results.push(...data);
   }
 
-  return { data, error: null };
+  // Combine everything, then sort by date so it still reads as one unified list
+  results.sort((a, b) => new Date(b.pub_date) - new Date(a.pub_date));
+
+  return { data: results, error: null };
 }
 
 export default async function HomePage() {

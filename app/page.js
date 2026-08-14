@@ -1,21 +1,53 @@
 import Parser from 'rss-parser';
+import { supabase } from '../lib/supabaseClient';
 
-// This is the ONE thing this starter proves out: pulling in real articles
-// from a live news source. Swap this URL for any local news RSS feed you want.
-const FEED_URL = 'https://feeds.npr.org/1001/rss.xml';
+// This is now a LIST so it's ready for you to add more feeds later.
+// Right now it's just one, matching what you had before.
+const FEEDS = [
+  { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
+];
 
-async function getHeadlines() {
+async function fetchAndSaveHeadlines() {
   const parser = new Parser();
-  try {
-    const feed = await parser.parseURL(FEED_URL);
-    return feed.items.slice(0, 10);
-  } catch (err) {
-    return [];
+
+  for (const feed of FEEDS) {
+    try {
+      const parsedFeed = await parser.parseURL(feed.url);
+
+      const rows = parsedFeed.items.slice(0, 10).map((item) => ({
+        title: item.title,
+        link: item.link,
+        source: feed.source,
+        pub_date: item.pubDate ? new Date(item.pubDate) : null,
+      }));
+
+      // upsert = insert new rows, but skip/update existing ones instead of
+      // erroring out, based on the "link" column being unique.
+      await supabase.from('headlines').upsert(rows, { onConflict: 'link' });
+    } catch (err) {
+      console.error(`Failed to fetch feed ${feed.url}:`, err.message);
+    }
   }
 }
 
+async function getStoredHeadlines() {
+  const { data, error } = await supabase
+    .from('headlines')
+    .select('*')
+    .order('pub_date', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error('Error reading headlines:', error.message);
+    return [];
+  }
+
+  return data;
+}
+
 export default async function HomePage() {
-  const headlines = await getHeadlines();
+  await fetchAndSaveHeadlines();
+  const headlines = await getStoredHeadlines();
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '48px 24px' }}>
@@ -28,20 +60,20 @@ export default async function HomePage() {
 
       {headlines.length === 0 && (
         <p style={{ color: '#999' }}>
-          No headlines loaded yet — check the feed URL in app/page.js.
+          No headlines yet — check your Supabase connection and feed URLs.
         </p>
       )}
 
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        {headlines.map((item, i) => (
+        {headlines.map((item) => (
           <li
-            key={i}
+            key={item.id}
             style={{
               borderBottom: '1px solid #ddd',
               padding: '20px 0',
             }}
           >
-            <a
+            
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"
@@ -50,7 +82,7 @@ export default async function HomePage() {
               {item.title}
             </a>
             <p style={{ color: '#666', fontSize: 14, marginTop: 6 }}>
-              {item.pubDate}
+              {item.source} · {item.pub_date ? new Date(item.pub_date).toLocaleString() : ''}
             </p>
           </li>
         ))}

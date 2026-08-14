@@ -66,7 +66,7 @@ export async function GET() {
   try {
     await resend.emails.send({
       from: 'Daily News <onboarding@resend.dev>',
-      to: 'joey@thefp.com',
+      to: 'joeygrimmer.production@gmail.com',
       subject: `Daily News — ${new Date().toLocaleDateString()}`,
       html: `<h2>Today's Headlines</h2><ul style="list-style:none;padding:0;">${htmlList}</ul>`,
     });

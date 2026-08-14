@@ -32,7 +32,7 @@ Respond with ONLY valid JSON, no other text, in this exact format:
     const parsed = JSON.parse(cleaned);
     return { score: parsed.score, summary: parsed.summary };
   } catch (err) {
-    return { score: null, summary: null };
+    return { score: null, summary: `ERROR: ${err.message}` };
   }
 }
 

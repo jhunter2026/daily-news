@@ -1,14 +1,17 @@
 import Parser from 'rss-parser';
 import { supabase } from '../lib/supabaseClient';
 
-// This is now a LIST so it's ready for you to add more feeds later.
-// Right now it's just one, matching what you had before.
+// This forces Next.js to run this code fresh on every single visit,
+// instead of reusing a snapshot from when the site was first built.
+export const dynamic = 'force-dynamic';
+
 const FEEDS = [
   { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
 ];
 
 async function fetchAndSaveHeadlines() {
   const parser = new Parser();
+  const errors = [];
 
   for (const feed of FEEDS) {
     try {
@@ -21,13 +24,17 @@ async function fetchAndSaveHeadlines() {
         pub_date: item.pubDate ? new Date(item.pubDate) : null,
       }));
 
-      // upsert = insert new rows, but skip/update existing ones instead of
-      // erroring out, based on the "link" column being unique.
-      await supabase.from('headlines').upsert(rows, { onConflict: 'link' });
+      const { error } = await supabase.from('headlines').upsert(rows, { onConflict: 'link' });
+
+      if (error) {
+        errors.push(`Supabase upsert error for ${feed.source}: ${error.message}`);
+      }
     } catch (err) {
-      console.error(`Failed to fetch feed ${feed.url}:`, err.message);
+      errors.push(`Failed to fetch feed ${feed.url}: ${err.message}`);
     }
   }
+
+  return errors;
 }
 
 async function getStoredHeadlines() {
@@ -38,16 +45,15 @@ async function getStoredHeadlines() {
     .limit(20);
 
   if (error) {
-    console.error('Error reading headlines:', error.message);
-    return [];
+    return { data: [], error: error.message };
   }
 
-  return data;
+  return { data, error: null };
 }
 
 export default async function HomePage() {
-  await fetchAndSaveHeadlines();
-  const headlines = await getStoredHeadlines();
+  const fetchErrors = await fetchAndSaveHeadlines();
+  const { data: headlines, error: readError } = await getStoredHeadlines();
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: '48px 24px' }}>
@@ -58,9 +64,19 @@ export default async function HomePage() {
         Today's Headlines
       </h2>
 
-      {headlines.length === 0 && (
+      {(fetchErrors.length > 0 || readError) && (
+        <div style={{ background: '#fee', border: '1px solid #c00', padding: 16, marginBottom: 24, borderRadius: 4 }}>
+          <strong style={{ color: '#900' }}>Debug info:</strong>
+          {fetchErrors.map((e, i) => (
+            <p key={i} style={{ color: '#900', fontSize: 13, margin: '4px 0' }}>{e}</p>
+          ))}
+          {readError && <p style={{ color: '#900', fontSize: 13, margin: '4px 0' }}>Read error: {readError}</p>}
+        </div>
+      )}
+
+      {headlines.length === 0 && fetchErrors.length === 0 && !readError && (
         <p style={{ color: '#999' }}>
-          No headlines yet — check your Supabase connection and feed URLs.
+          No headlines yet — the feed may not have returned any items.
         </p>
       )}
 
@@ -73,7 +89,7 @@ export default async function HomePage() {
               padding: '20px 0',
             }}
           >
-            <a
+            
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"

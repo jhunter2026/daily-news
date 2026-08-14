@@ -2,10 +2,12 @@ import Parser from 'rss-parser';
 import { supabase } from '../../../lib/supabaseClient';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const FEEDS = [
   { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
@@ -14,6 +16,26 @@ const FEEDS = [
   { url: 'https://www.thefp.com/feed', source: 'The Free Press' },
 ];
 
+async function scoreHeadline(title) {
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const prompt = `You are scoring a news headline for "national breakout potential" - how likely this local/niche story is to become a bigger national conversation.
+
+Headline: "${title}"
+
+Respond with ONLY valid JSON, no other text, in this exact format:
+{"score": <number 1-10>, "summary": "<one sentence explaining why, under 25 words>"}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    const cleaned = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return { score: parsed.score, summary: parsed.summary };
+  } catch (err) {
+    return { score: null, summary: null };
+  }
+}
+
 export async function GET() {
   const parser = new Parser();
   const results = [];
@@ -21,13 +43,20 @@ export async function GET() {
   for (const feed of FEEDS) {
     try {
       const parsedFeed = await parser.parseURL(feed.url);
+      const items = parsedFeed.items.slice(0, 10);
 
-      const rows = parsedFeed.items.slice(0, 10).map((item) => ({
-        title: item.title,
-        link: item.link,
-        source: feed.source,
-        pub_date: item.pubDate ? new Date(item.pubDate) : null,
-      }));
+      const rows = [];
+      for (const item of items) {
+        const { score, summary } = await scoreHeadline(item.title);
+        rows.push({
+          title: item.title,
+          link: item.link,
+          source: feed.source,
+          pub_date: item.pubDate ? new Date(item.pubDate) : null,
+          score,
+          summary,
+        });
+      }
 
       const { error } = await supabase.from('headlines').upsert(rows, { onConflict: 'link' });
 
@@ -41,7 +70,6 @@ export async function GET() {
     }
   }
 
-  // Grab today's freshest headlines per source, same fairness logic as the homepage
   const emailHeadlines = [];
   for (const feed of FEEDS) {
     const { data } = await supabase
@@ -54,11 +82,10 @@ export async function GET() {
   }
   emailHeadlines.sort((a, b) => new Date(b.pub_date) - new Date(a.pub_date));
 
-  // Build a simple HTML email
   const htmlList = emailHeadlines
     .map(
       (item) =>
-        `<li style="margin-bottom:16px;"><a href="${item.link}" style="font-size:16px;color:#111;font-weight:600;text-decoration:none;">${item.title}</a><br/><span style="color:#666;font-size:13px;">${item.source}</span></li>`
+        `<li style="margin-bottom:16px;"><a href="${item.link}" style="font-size:16px;color:#111;font-weight:600;text-decoration:none;">${item.title}</a><br/><span style="color:#666;font-size:13px;">${item.source}${item.score ? ` · Score: ${item.score}/10` : ''}</span>${item.summary ? `<br/><span style="color:#444;font-size:14px;">${item.summary}</span>` : ''}</li>`
     )
     .join('');
 

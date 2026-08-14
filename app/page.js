@@ -89,7 +89,7 @@ export default async function HomePage() {
               padding: '20px 0',
             }}
           >
-            
+            <a
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"

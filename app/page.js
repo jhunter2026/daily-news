@@ -1,49 +1,10 @@
-import Parser from 'rss-parser';
 import { supabase } from '../lib/supabaseClient';
+import { FEEDS } from '../lib/feeds';
 
-// This forces Next.js to run this code fresh on every single visit,
-// instead of reusing a snapshot from when the site was first built.
 export const dynamic = 'force-dynamic';
-
-const FEEDS = [
-  { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
-  { url: 'https://gothamist.com/feed', source: 'Gothamist' },
-  { url: 'https://laist.com/index.atom', source: 'LAist' },
-  { url: 'https://www.themeateater.com/feed', source: 'MeatEater' },
-  { url: 'https://www.thefp.com/feed', source: 'The Free Press' },
-];
-
-async function fetchAndSaveHeadlines() {
-  const parser = new Parser();
-  const errors = [];
-
-  for (const feed of FEEDS) {
-    try {
-      const parsedFeed = await parser.parseURL(feed.url);
-
-      const rows = parsedFeed.items.slice(0, 10).map((item) => ({
-        title: item.title,
-        link: item.link,
-        source: feed.source,
-        pub_date: item.pubDate ? new Date(item.pubDate) : null,
-      }));
-
-      const { error } = await supabase.from('headlines').upsert(rows, { onConflict: 'link' });
-
-      if (error) {
-        errors.push(`Supabase upsert error for ${feed.source}: ${error.message}`);
-      }
-    } catch (err) {
-      errors.push(`Failed to fetch feed ${feed.url}: ${err.message}`);
-    }
-  }
-
-  return errors;
-}
 
 async function getStoredHeadlines() {
   const results = [];
-
   for (const feed of FEEDS) {
     const { data, error } = await supabase
       .from('headlines')
@@ -51,22 +12,16 @@ async function getStoredHeadlines() {
       .eq('source', feed.source)
       .order('pub_date', { ascending: false })
       .limit(5);
-
     if (error) {
       return { data: [], error: `Error reading ${feed.source}: ${error.message}` };
     }
-
     results.push(...data);
   }
-
-  // Combine everything, then sort by date so it still reads as one unified list
   results.sort((a, b) => new Date(b.pub_date) - new Date(a.pub_date));
-
   return { data: results, error: null };
 }
 
 export default async function HomePage() {
-  const fetchErrors = await fetchAndSaveHeadlines();
   const { data: headlines, error: readError } = await getStoredHeadlines();
 
   return (
@@ -77,23 +32,17 @@ export default async function HomePage() {
       <h2 style={{ fontSize: 32, marginTop: 4, marginBottom: 32 }}>
         Today's Headlines
       </h2>
-
-      {(fetchErrors.length > 0 || readError) && (
+      {readError && (
         <div style={{ background: '#fee', border: '1px solid #c00', padding: 16, marginBottom: 24, borderRadius: 4 }}>
           <strong style={{ color: '#900' }}>Debug info:</strong>
-          {fetchErrors.map((e, i) => (
-            <p key={i} style={{ color: '#900', fontSize: 13, margin: '4px 0' }}>{e}</p>
-          ))}
-          {readError && <p style={{ color: '#900', fontSize: 13, margin: '4px 0' }}>Read error: {readError}</p>}
+          <p style={{ color: '#900', fontSize: 13, margin: '4px 0' }}>Read error: {readError}</p>
         </div>
       )}
-
-      {headlines.length === 0 && fetchErrors.length === 0 && !readError && (
+      {headlines.length === 0 && !readError && (
         <p style={{ color: '#999' }}>
-          No headlines yet — the feed may not have returned any items.
+          No headlines yet — check back after the next scheduled update.
         </p>
       )}
-
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {headlines.map((item) => (
           <li
@@ -103,7 +52,7 @@ export default async function HomePage() {
               padding: '20px 0',
             }}
           >
-            <a
+            
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"
@@ -113,7 +62,11 @@ export default async function HomePage() {
             </a>
             <p style={{ color: '#666', fontSize: 14, marginTop: 6 }}>
               {item.source} · {item.pub_date ? new Date(item.pub_date).toLocaleString() : ''}
+              {item.score ? ` · Score: ${item.score}/10` : ''}
             </p>
+            {item.summary && !item.summary.startsWith('ERROR') && (
+              <p style={{ color: '#444', fontSize: 14, marginTop: 4 }}>{item.summary}</p>
+            )}
           </li>
         ))}
       </ul>

@@ -44,17 +44,27 @@ export async function GET() {
     try {
       const parsedFeed = await parser.parseURL(feed.url);
       const items = parsedFeed.items.slice(0, 10);
-
+    const links = items.map((i) => i.link);
+    const { data: existing } = await supabase
+    .from('headlines')
+    .select('link, score')
+    .in('link', links);
+  const alreadyScored = new Set(
+    (existing || []).filter((r) => r.score !== null).map((r) => r.link)
+);
       const rows = [];
       for (const item of items) {
-        const { score, summary } = await scoreHeadline(item.title);
-        rows.push({
-          title: item.title,
-          link: item.link,
-          source: feed.source,
-          pub_date: item.pubDate ? new Date(item.pubDate) : null,
-          score,
-          summary,
+        if (alreadyScored.has(item.link)) {
+        continue;
+    }
+  const { score, summary } = await scoreHeadline(item.title);
+  rows.push({
+    title: item.title,
+    link: item.link,
+    source: feed.source,
+    pub_date: item.pubDate ? new Date(item.pubDate) : null,
+    score,
+    summary,
         });
       }
 

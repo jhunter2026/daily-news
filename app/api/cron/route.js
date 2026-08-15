@@ -18,7 +18,7 @@ const FEEDS = [
 
 async function scoreHeadline(title) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
     const prompt = `You are scoring a news headline for "national breakout potential" - how likely this local/niche story is to become a bigger national conversation.
 
 Headline: "${title}"

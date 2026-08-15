@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
 import { supabase } from '../../../lib/supabaseClient';
+import { FEEDS } from '../../../lib/feeds';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -9,12 +10,6 @@ export const dynamic = 'force-dynamic';
 const resend = new Resend(process.env.RESEND_API_KEY);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const FEEDS = [
-  { url: 'https://feeds.npr.org/1001/rss.xml', source: 'NPR' },
-  { url: 'https://gothamist.com/feed', source: 'Gothamist' },
-  { url: 'https://www.themeateater.com/feed', source: 'MeatEater' },
-  { url: 'https://www.thefp.com/feed', source: 'The Free Press' },
-];
 
 async function scoreHeadline(title) {
   try {

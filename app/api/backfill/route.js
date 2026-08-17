@@ -10,10 +10,10 @@ export const maxDuration = 10; // Vercel Hobby plan hard ceiling — cannot be r
 // Gemini call latency (not row count) is what actually limits a batch here,
 // so this is a deadline, not a count. The check only runs *between* items, so
 // the worst case isn't TIME_BUDGET_MS -- it's TIME_BUDGET_MS + one more full
-// GEMINI_TIMEOUT_MS (the item that was already in flight when the deadline
-// was crossed). 6000+5000 already exceeded the 10s wall in practice; this
-// leaves real margin: 4500 + 3000 = 7500, plus ~500ms overhead, well under 10s.
-const TIME_BUDGET_MS = 4500;
+// GEMINI_TIMEOUT_MS (see lib/scoring.js) for the item already in flight when
+// the deadline was crossed: 3500+4500=8000ms, plus ~500ms overhead, leaves
+// ~1.5s under the 10s wall.
+const TIME_BUDGET_MS = 3500;
 const BATCH_SIZE = 50;
 
 const categoryBySource = Object.fromEntries(FEEDS.map((f) => [f.source, f.category]));

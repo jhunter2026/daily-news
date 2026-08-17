@@ -15,13 +15,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // deadline rather than a headline/row count: Gemini call latency is the
 // variable that actually determines how much fits, not an item count. The
 // check only runs *between* items, so the worst case isn't SCORING_DEADLINE_MS
-// -- it's SCORING_DEADLINE_MS + one more full GEMINI_TIMEOUT_MS (3s, see
+// -- it's SCORING_DEADLINE_MS + one more full GEMINI_TIMEOUT_MS (see
 // lib/scoring.js) for the item already in flight when the deadline was
-// crossed. A 6000+5000 combination measurably blew the 10s wall in practice;
-// 4500+3000=7500 leaves real margin, and email only gets a further ~2.5s on
-// top of that worst case.
-const SCORING_DEADLINE_MS = 4500;
-const EMAIL_ATTEMPT_DEADLINE_MS = 7500;
+// crossed: 3500+4500=8000ms, leaving ~2s under the 10s wall. Email only gets
+// a further ~500ms of slack on top of that worst case before being skipped.
+const SCORING_DEADLINE_MS = 3500;
+const EMAIL_ATTEMPT_DEADLINE_MS = 8500;
 
 const parser = new Parser({
   headers: {

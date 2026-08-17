@@ -39,11 +39,12 @@ export async function GET(request) {
   // calls even though remaining supposedly hadn't moved, which is impossible
   // if remaining were accurate and stable).
   if (new URL(request.url).searchParams.get('stats')) {
-    const [{ count: total }, { count: nullCount }] = await Promise.all([
+    const [{ count: total }, { count: nullCount }, { data: nullRows }] = await Promise.all([
       supabaseAdmin.from('headlines').select('id', { count: 'exact', head: true }),
       supabaseAdmin.from('headlines').select('id', { count: 'exact', head: true }).is('policy_relevance', null),
+      supabaseAdmin.from('headlines').select('id, title, source').is('policy_relevance', null),
     ]);
-    return NextResponse.json({ total, nullCount });
+    return NextResponse.json({ total, nullCount, nullRows });
   }
 
   const start = Date.now();

@@ -50,6 +50,7 @@ export async function GET(request) {
   let stoppedReason = 'batch_complete';
   let lastBlockedDetail = null;
   let lastScoreError = null;
+  const debug = []; // temporary: proves whether a "scored" write actually persists
 
   for (const row of rows) {
     if (Date.now() - start > TIME_BUDGET_MS) {
@@ -98,6 +99,14 @@ export async function GET(request) {
       lastScoreError = summary;
     } else {
       scored++;
+      // Re-read straight from the DB (bypassing whatever .select() on the
+      // update returned) to confirm the write actually persisted.
+      const { data: verifyRow } = await supabase
+        .from('headlines')
+        .select('id, policy_relevance')
+        .eq('id', row.id)
+        .single();
+      debug.push({ id: row.id, wrote: policy_relevance, verifiedInDb: verifyRow?.policy_relevance ?? 'ROW_NOT_FOUND' });
     }
   }
 
@@ -113,6 +122,7 @@ export async function GET(request) {
     scoreFailed,
     ...(blocked ? { lastBlockedDetail } : {}),
     ...(scoreFailed ? { lastScoreError } : {}),
+    debug,
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,

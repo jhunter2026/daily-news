@@ -50,13 +50,15 @@ export async function GET() {
     try {
       const parsedFeed = await parser.parseURL(feed.url);
       const items = parsedFeed.items.slice(0, 10);
-    const links = items.map((i) => i.link);
-    const { data: existing } = await supabase
-    .from('headlines')
-    .select('link, score')
-    .in('link', links);
-  const alreadyScored = new Set(
-    (existing || []).filter((r) => r.score !== null).map((r) => r.link)
+ const links = items.map((i) => i.link);
+const { data: existing } = await supabase
+  .from('headlines')
+  .select('link, score, policy_relevance')
+  .in('link', links);
+const alreadyScored = new Set(
+  (existing || [])
+    .filter((r) => r.score !== null && r.policy_relevance !== null)
+    .map((r) => r.link)
 );
       const rows = [];
       for (const item of items) {

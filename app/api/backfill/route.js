@@ -47,6 +47,41 @@ export async function GET(request) {
     return NextResponse.json({ total, nullCount, nullRows });
   }
 
+  // One-off cleanup: isRelevant() only gates *new* general-source headlines
+  // before they're first scored, so rows scored before that filter existed
+  // (or before a keyword list update) never get re-checked. This re-applies
+  // isRelevant() to every already-scored general-source row and deletes the
+  // ones that don't match. No Gemini calls involved, so no time-budget looping
+  // needed -- one call handles the whole table.
+  if (new URL(request.url).searchParams.get('cleanupRelevance')) {
+    const generalSources = FEEDS.filter((f) => f.category === 'general').map((f) => f.source);
+    const { data: rows, error: fetchError } = await supabaseAdmin
+      .from('headlines')
+      .select('id, title, source')
+      .in('source', generalSources)
+      .not('score', 'is', null);
+
+    if (fetchError) {
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    const toDelete = rows.filter((row) => !isRelevant(row.title, 'general'));
+    let deleted = 0;
+    if (toDelete.length > 0) {
+      const { data: deletedRows, error: deleteError } = await supabaseAdmin
+        .from('headlines')
+        .delete()
+        .in('id', toDelete.map((row) => row.id))
+        .select('id');
+      if (deleteError) {
+        return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      }
+      deleted = deletedRows?.length ?? 0;
+    }
+
+    return NextResponse.json({ checked: rows.length, deleted, kept: rows.length - deleted });
+  }
+
   const start = Date.now();
 
   const { data: rows, error: fetchError } = await supabaseAdmin
@@ -128,6 +163,5 @@ export async function GET(request) {
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,
-    fetchedIds: rows.map((r) => r.id), // temporary: checking whether the same stale batch keeps getting served
   });
 }

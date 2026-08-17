@@ -1,5 +1,5 @@
 import Parser from 'rss-parser';
-import { supabase } from '../../../lib/supabaseClient';
+import { supabaseAdmin } from '../../../lib/supabaseAdmin';
 import { FEEDS } from '../../../lib/feeds';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
@@ -39,7 +39,7 @@ async function fetchCandidates(feed) {
     if (items.length === 0) return { feed, status: 'ok', items: [] };
 
     const links = items.map((i) => i.link);
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseAdmin
       .from('headlines')
       .select('link, score, policy_relevance')
       .in('link', links);
@@ -81,6 +81,7 @@ export async function GET() {
 
     let scoredCount = 0;
     let errorCount = 0;
+    let scoreFailedCount = 0;
     let lastError = null;
 
     for (const item of items) {
@@ -89,39 +90,38 @@ export async function GET() {
         break;
       }
       const { score, policy_relevance, summary } = await scoreHeadline(item.title);
-      // .select() forces PostgREST to return the written row, so an RLS policy
-      // silently denying the write (0 rows, no error) doesn't get counted as success.
-      const { data: writtenRows, error } = await supabase
-        .from('headlines')
-        .upsert(
-          {
-            title: item.title,
-            link: item.link,
-            source: feed.source,
-            pub_date: item.pubDate ? new Date(item.pubDate) : null,
-            score,
-            policy_relevance,
-            summary,
-          },
-          { onConflict: 'link' }
-        )
-        .select('id');
+      const { error } = await supabaseAdmin.from('headlines').upsert(
+        {
+          title: item.title,
+          link: item.link,
+          source: feed.source,
+          pub_date: item.pubDate ? new Date(item.pubDate) : null,
+          score,
+          policy_relevance,
+          summary,
+        },
+        { onConflict: 'link' }
+      );
       if (error) {
         errorCount++;
         lastError = error.message;
-      } else if (!writtenRows || writtenRows.length === 0) {
-        errorCount++;
-        lastError = `upsert for "${item.link}" matched 0 rows (likely blocked by RLS)`;
+      } else if (policy_relevance === null || (summary && summary.startsWith('ERROR'))) {
+        // The write succeeded, but scoreHeadline() itself errored (e.g. a
+        // transient Gemini failure) and wrote back nulls — this headline will
+        // need /api/backfill later rather than being silently counted as scored.
+        scoreFailedCount++;
+        lastError = summary;
       } else {
         scoredCount++;
       }
     }
 
-    const pending = items.length - scoredCount - errorCount;
+    const pending = items.length - scoredCount - errorCount - scoreFailedCount;
     results.push({
       source: feed.source,
       status: errorCount > 0 ? 'error' : pending > 0 ? 'partial' : 'ok',
       scored: scoredCount,
+      ...(scoreFailedCount ? { scoreFailed: scoreFailedCount } : {}),
       ...(errorCount ? { errors: errorCount, message: lastError } : {}),
       ...(pending > 0 ? { pending } : {}),
     });
@@ -132,7 +132,7 @@ export async function GET() {
     try {
       const digestResults = await Promise.all(
         FEEDS.map((feed) =>
-          supabase
+          supabaseAdmin
             .from('headlines')
             .select('*')
             .eq('source', feed.source)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabaseClient';
+import { supabaseAdmin } from '../../../lib/supabaseAdmin';
 import { FEEDS } from '../../../lib/feeds';
 import { scoreHeadline } from '../../../lib/scoring';
 import { isRelevant } from '../../../lib/relevance';
@@ -31,22 +31,9 @@ export async function GET(request) {
     }
   }
 
-  // Read-only diagnostic: ?peek=<id> returns that row's current DB state with
-  // no writes, so we can check whether a previously-fixed row silently
-  // reverts later without spending any more Gemini calls to find out.
-  const peekId = new URL(request.url).searchParams.get('peek');
-  if (peekId) {
-    const { data: peekRow, error: peekError } = await supabase
-      .from('headlines')
-      .select('*')
-      .eq('id', peekId)
-      .single();
-    return NextResponse.json({ peekId, peekRow, peekError: peekError?.message ?? null });
-  }
-
   const start = Date.now();
 
-  const { data: rows, error: fetchError } = await supabase
+  const { data: rows, error: fetchError } = await supabaseAdmin
     .from('headlines')
     .select('id, title, source')
     .is('policy_relevance', null)
@@ -58,12 +45,9 @@ export async function GET(request) {
 
   let scored = 0;
   let deleted = 0;
-  let blocked = 0; // write reported no error but affected 0 rows (RLS silently denying it)
   let scoreFailed = 0; // write succeeded, but scoreHeadline() itself errored (still null policy_relevance)
   let stoppedReason = 'batch_complete';
-  let lastBlockedDetail = null;
   let lastScoreError = null;
-  const debug = []; // temporary: proves whether a "scored" write actually persists
 
   for (const row of rows) {
     if (Date.now() - start > TIME_BUDGET_MS) {
@@ -73,57 +57,30 @@ export async function GET(request) {
 
     const category = categoryBySource[row.source];
     if (!isRelevant(row.title, category)) {
-      // .select() forces PostgREST to return the affected rows, so we can tell
-      // "0 rows matched (e.g. RLS denied it)" apart from "actually deleted".
-      const { data: deletedRows, error: deleteError } = await supabase
-        .from('headlines')
-        .delete()
-        .eq('id', row.id)
-        .select('id');
-      if (deleteError) {
-        blocked++;
-        lastBlockedDetail = deleteError.message;
-      } else if (!deletedRows || deletedRows.length === 0) {
-        blocked++;
-        lastBlockedDetail = `delete on id=${row.id} matched 0 rows (likely blocked by RLS)`;
-      } else {
-        deleted++;
-      }
+      const { error: deleteError } = await supabaseAdmin.from('headlines').delete().eq('id', row.id);
+      if (!deleteError) deleted++;
       continue;
     }
 
     const { score, policy_relevance, summary } = await scoreHeadline(row.title);
-    const { data: updatedRows, error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from('headlines')
       .update({ score, policy_relevance, summary })
-      .eq('id', row.id)
-      .select('id');
-    if (updateError) {
-      blocked++;
-      lastBlockedDetail = updateError.message;
-    } else if (!updatedRows || updatedRows.length === 0) {
-      blocked++;
-      lastBlockedDetail = `update on id=${row.id} matched 0 rows (likely blocked by RLS)`;
-    } else if (policy_relevance === null || (summary && summary.startsWith('ERROR'))) {
-      // The write itself succeeded, but scoreHeadline() errored (e.g. bad model
-      // name, malformed JSON from Gemini) and wrote back nulls — this row will
-      // keep reappearing in the backlog query forever if left as "scored".
+      .eq('id', row.id);
+    if (updateError) continue;
+
+    if (policy_relevance === null || (summary && summary.startsWith('ERROR'))) {
+      // The write succeeded, but scoreHeadline() itself errored (e.g. a
+      // transient Gemini failure) and wrote back nulls — this row will keep
+      // reappearing in the backlog query forever if counted as "scored".
       scoreFailed++;
       lastScoreError = summary;
     } else {
       scored++;
-      // Re-read straight from the DB (bypassing whatever .select() on the
-      // update returned) to confirm the write actually persisted.
-      const { data: verifyRow } = await supabase
-        .from('headlines')
-        .select('id, policy_relevance')
-        .eq('id', row.id)
-        .single();
-      debug.push({ id: row.id, wrote: policy_relevance, verifiedInDb: verifyRow?.policy_relevance ?? 'ROW_NOT_FOUND' });
     }
   }
 
-  const { count: remaining } = await supabase
+  const { count: remaining } = await supabaseAdmin
     .from('headlines')
     .select('id', { count: 'exact', head: true })
     .is('policy_relevance', null);
@@ -131,11 +88,8 @@ export async function GET(request) {
   return NextResponse.json({
     scored,
     deleted,
-    blocked,
     scoreFailed,
-    ...(blocked ? { lastBlockedDetail } : {}),
     ...(scoreFailed ? { lastScoreError } : {}),
-    debug,
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,

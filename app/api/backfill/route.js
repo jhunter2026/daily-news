@@ -50,6 +50,7 @@ export async function GET(request) {
     .from('headlines')
     .select('id, title, source')
     .is('policy_relevance', null)
+    .order('id', { ascending: true })
     .limit(BATCH_SIZE);
 
   if (fetchError) {
@@ -58,6 +59,7 @@ export async function GET(request) {
 
   let scored = 0;
   let deleted = 0;
+  let noMatch = 0; // delete/update reported no error but matched 0 rows (stale id, already handled)
   let scoreFailed = 0; // write succeeded, but scoreHeadline() itself errored (still null policy_relevance)
   let stoppedReason = 'batch_complete';
   let lastScoreError = null;
@@ -70,17 +72,33 @@ export async function GET(request) {
 
     const category = categoryBySource[row.source];
     if (!isRelevant(row.title, category)) {
-      const { error: deleteError } = await supabaseAdmin.from('headlines').delete().eq('id', row.id);
-      if (!deleteError) deleted++;
+      // .select() forces the actual affected row back so a 0-row match (id no
+      // longer exists / already handled) isn't miscounted as a real delete.
+      const { data: deletedRows, error: deleteError } = await supabaseAdmin
+        .from('headlines')
+        .delete()
+        .eq('id', row.id)
+        .select('id');
+      if (deleteError) continue;
+      if (!deletedRows || deletedRows.length === 0) {
+        noMatch++;
+      } else {
+        deleted++;
+      }
       continue;
     }
 
     const { score, policy_relevance, summary } = await scoreHeadline(row.title);
-    const { error: updateError } = await supabaseAdmin
+    const { data: updatedRows, error: updateError } = await supabaseAdmin
       .from('headlines')
       .update({ score, policy_relevance, summary })
-      .eq('id', row.id);
+      .eq('id', row.id)
+      .select('id');
     if (updateError) continue;
+    if (!updatedRows || updatedRows.length === 0) {
+      noMatch++;
+      continue;
+    }
 
     if (policy_relevance === null || (summary && summary.startsWith('ERROR'))) {
       // The write succeeded, but scoreHeadline() itself errored (e.g. a
@@ -101,10 +119,12 @@ export async function GET(request) {
   return NextResponse.json({
     scored,
     deleted,
+    noMatch,
     scoreFailed,
     ...(scoreFailed ? { lastScoreError } : {}),
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,
+    fetchedIds: rows.map((r) => r.id), // temporary: checking whether the same stale batch keeps getting served
   });
 }

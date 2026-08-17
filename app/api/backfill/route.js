@@ -46,8 +46,10 @@ export async function GET(request) {
   let scored = 0;
   let deleted = 0;
   let blocked = 0; // write reported no error but affected 0 rows (RLS silently denying it)
+  let scoreFailed = 0; // write succeeded, but scoreHeadline() itself errored (still null policy_relevance)
   let stoppedReason = 'batch_complete';
   let lastBlockedDetail = null;
+  let lastScoreError = null;
 
   for (const row of rows) {
     if (Date.now() - start > TIME_BUDGET_MS) {
@@ -88,6 +90,12 @@ export async function GET(request) {
     } else if (!updatedRows || updatedRows.length === 0) {
       blocked++;
       lastBlockedDetail = `update on id=${row.id} matched 0 rows (likely blocked by RLS)`;
+    } else if (policy_relevance === null || (summary && summary.startsWith('ERROR'))) {
+      // The write itself succeeded, but scoreHeadline() errored (e.g. bad model
+      // name, malformed JSON from Gemini) and wrote back nulls — this row will
+      // keep reappearing in the backlog query forever if left as "scored".
+      scoreFailed++;
+      lastScoreError = summary;
     } else {
       scored++;
     }
@@ -102,7 +110,9 @@ export async function GET(request) {
     scored,
     deleted,
     blocked,
+    scoreFailed,
     ...(blocked ? { lastBlockedDetail } : {}),
+    ...(scoreFailed ? { lastScoreError } : {}),
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,

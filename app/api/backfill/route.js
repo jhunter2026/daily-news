@@ -8,10 +8,12 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 10; // Vercel Hobby plan hard ceiling — cannot be raised
 
 // Gemini call latency (not row count) is what actually limits a batch here,
-// so this is a deadline, not a count. Leaves ~2s headroom under the 10s hard
-// wall for the initial fetch, the final "remaining" count query, and the
-// response itself.
-const TIME_BUDGET_MS = 8000;
+// so this is a deadline, not a count. The budget is only checked *between*
+// iterations, so a single slow scoreHeadline() call can still carry the
+// total past it -- an 8000ms budget already hit a real
+// FUNCTION_INVOCATION_TIMEOUT once, so this leaves more like ~3.5s of margin
+// under the 10s hard wall instead of ~2s.
+const TIME_BUDGET_MS = 6000;
 const BATCH_SIZE = 50;
 
 const categoryBySource = Object.fromEntries(FEEDS.map((f) => [f.source, f.category]));

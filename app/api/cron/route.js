@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { scoreHeadline } from '../../../lib/scoring';
 import { isRelevant } from '../../../lib/relevance';
+import { SCORE_THRESHOLD } from '../../../lib/curation';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 10; // Vercel Hobby plan hard ceiling — cannot be raised
@@ -135,20 +136,14 @@ export async function GET() {
   let emailStatus = 'skipped: time_budget';
   if (Date.now() - start < EMAIL_ATTEMPT_DEADLINE_MS) {
     try {
-      const digestResults = await Promise.all(
-        FEEDS.map((feed) =>
-          supabaseAdmin
-            .from('headlines')
-            .select('*')
-            .eq('source', feed.source)
-            .order('pub_date', { ascending: false })
-            .limit(5)
-        )
-      );
-      const emailHeadlines = digestResults.flatMap((r) => r.data || []);
-      emailHeadlines.sort((a, b) => new Date(b.pub_date) - new Date(a.pub_date));
+      const { data: emailHeadlines } = await supabaseAdmin
+        .from('headlines')
+        .select('*')
+        .gt('score', SCORE_THRESHOLD)
+        .order('score', { ascending: false })
+        .order('pub_date', { ascending: false });
 
-      const htmlList = emailHeadlines
+      const htmlList = (emailHeadlines || [])
         .map(
           (item) =>
             `<li style="margin-bottom:16px;"><a href="${item.link}" style="font-size:16px;color:#111;font-weight:600;text-decoration:none;">${item.title}</a><br/><span style="color:#666;font-size:13px;">${item.source}${item.score ? ` · Score: ${item.score}/10` : ''}</span>${item.summary ? `<br/><span style="color:#444;font-size:14px;">${item.summary}</span>` : ''}</li>`

@@ -1,24 +1,19 @@
 import { supabase } from '../lib/supabaseClient';
-import { FEEDS } from '../lib/feeds';
+import { SCORE_THRESHOLD } from '../lib/curation';
 
 export const dynamic = 'force-dynamic';
 
 async function getStoredHeadlines() {
-  const results = [];
-  for (const feed of FEEDS) {
-    const { data, error } = await supabase
-      .from('headlines')
-      .select('*')
-      .eq('source', feed.source)
-      .order('pub_date', { ascending: false })
-      .limit(5);
-    if (error) {
-      return { data: [], error: `Error reading ${feed.source}: ${error.message}` };
-    }
-    results.push(...data);
+  const { data, error } = await supabase
+    .from('headlines')
+    .select('*')
+    .gt('score', SCORE_THRESHOLD)
+    .order('score', { ascending: false })
+    .order('pub_date', { ascending: false });
+  if (error) {
+    return { data: [], error: `Error reading headlines: ${error.message}` };
   }
-  results.sort((a, b) => new Date(b.pub_date) - new Date(a.pub_date));
-  return { data: results, error: null };
+  return { data: data || [], error: null };
 }
 
 export default async function HomePage() {

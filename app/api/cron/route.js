@@ -89,21 +89,29 @@ export async function GET() {
         break;
       }
       const { score, policy_relevance, summary } = await scoreHeadline(item.title);
-      const { error } = await supabase.from('headlines').upsert(
-        {
-          title: item.title,
-          link: item.link,
-          source: feed.source,
-          pub_date: item.pubDate ? new Date(item.pubDate) : null,
-          score,
-          policy_relevance,
-          summary,
-        },
-        { onConflict: 'link' }
-      );
+      // .select() forces PostgREST to return the written row, so an RLS policy
+      // silently denying the write (0 rows, no error) doesn't get counted as success.
+      const { data: writtenRows, error } = await supabase
+        .from('headlines')
+        .upsert(
+          {
+            title: item.title,
+            link: item.link,
+            source: feed.source,
+            pub_date: item.pubDate ? new Date(item.pubDate) : null,
+            score,
+            policy_relevance,
+            summary,
+          },
+          { onConflict: 'link' }
+        )
+        .select('id');
       if (error) {
         errorCount++;
         lastError = error.message;
+      } else if (!writtenRows || writtenRows.length === 0) {
+        errorCount++;
+        lastError = `upsert for "${item.link}" matched 0 rows (likely blocked by RLS)`;
       } else {
         scoredCount++;
       }

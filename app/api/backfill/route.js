@@ -45,7 +45,9 @@ export async function GET(request) {
 
   let scored = 0;
   let deleted = 0;
+  let blocked = 0; // write reported no error but affected 0 rows (RLS silently denying it)
   let stoppedReason = 'batch_complete';
+  let lastBlockedDetail = null;
 
   for (const row of rows) {
     if (Date.now() - start > TIME_BUDGET_MS) {
@@ -55,17 +57,40 @@ export async function GET(request) {
 
     const category = categoryBySource[row.source];
     if (!isRelevant(row.title, category)) {
-      const { error: deleteError } = await supabase.from('headlines').delete().eq('id', row.id);
-      if (!deleteError) deleted++;
+      // .select() forces PostgREST to return the affected rows, so we can tell
+      // "0 rows matched (e.g. RLS denied it)" apart from "actually deleted".
+      const { data: deletedRows, error: deleteError } = await supabase
+        .from('headlines')
+        .delete()
+        .eq('id', row.id)
+        .select('id');
+      if (deleteError) {
+        blocked++;
+        lastBlockedDetail = deleteError.message;
+      } else if (!deletedRows || deletedRows.length === 0) {
+        blocked++;
+        lastBlockedDetail = `delete on id=${row.id} matched 0 rows (likely blocked by RLS)`;
+      } else {
+        deleted++;
+      }
       continue;
     }
 
     const { score, policy_relevance, summary } = await scoreHeadline(row.title);
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from('headlines')
       .update({ score, policy_relevance, summary })
-      .eq('id', row.id);
-    if (!updateError) scored++;
+      .eq('id', row.id)
+      .select('id');
+    if (updateError) {
+      blocked++;
+      lastBlockedDetail = updateError.message;
+    } else if (!updatedRows || updatedRows.length === 0) {
+      blocked++;
+      lastBlockedDetail = `update on id=${row.id} matched 0 rows (likely blocked by RLS)`;
+    } else {
+      scored++;
+    }
   }
 
   const { count: remaining } = await supabase
@@ -76,6 +101,8 @@ export async function GET(request) {
   return NextResponse.json({
     scored,
     deleted,
+    blocked,
+    ...(blocked ? { lastBlockedDetail } : {}),
     remaining: remaining ?? null,
     elapsedMs: Date.now() - start,
     stoppedReason,

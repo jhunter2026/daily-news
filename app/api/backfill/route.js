@@ -1,0 +1,83 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '../../../lib/supabaseClient';
+import { FEEDS } from '../../../lib/feeds';
+import { scoreHeadline } from '../../../lib/scoring';
+import { isRelevant } from '../../../lib/relevance';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 10; // Vercel Hobby plan hard ceiling — cannot be raised
+
+// Gemini call latency (not row count) is what actually limits a batch here,
+// so this is a deadline, not a count. Leaves ~2s headroom under the 10s hard
+// wall for the initial fetch, the final "remaining" count query, and the
+// response itself.
+const TIME_BUDGET_MS = 8000;
+const BATCH_SIZE = 50;
+
+const categoryBySource = Object.fromEntries(FEEDS.map((f) => [f.source, f.category]));
+
+// One-off backlog clearer for rows stored before policy_relevance existed.
+// On a 10s function ceiling, one call realistically only scores a handful of
+// rows (however many Gemini calls fit before TIME_BUDGET_MS) — call this
+// endpoint repeatedly (e.g. in a curl loop) until the response's `remaining`
+// hits 0. Clearing a large backlog this way will take many invocations.
+export async function GET(request) {
+  const secret = process.env.BACKFILL_SECRET;
+  if (secret) {
+    const url = new URL(request.url);
+    const provided = request.headers.get('authorization')?.replace('Bearer ', '') || url.searchParams.get('secret');
+    if (provided !== secret) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+  }
+
+  const start = Date.now();
+
+  const { data: rows, error: fetchError } = await supabase
+    .from('headlines')
+    .select('id, title, source')
+    .is('policy_relevance', null)
+    .limit(BATCH_SIZE);
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  let scored = 0;
+  let deleted = 0;
+  let stoppedReason = 'batch_complete';
+
+  for (const row of rows) {
+    if (Date.now() - start > TIME_BUDGET_MS) {
+      stoppedReason = 'time_budget';
+      break;
+    }
+
+    const category = categoryBySource[row.source];
+    if (!isRelevant(row.title, category)) {
+      const { error: deleteError } = await supabase.from('headlines').delete().eq('id', row.id);
+      if (!deleteError) deleted++;
+      continue;
+    }
+
+    const { score, policy_relevance, summary } = await scoreHeadline(row.title);
+    const { error: updateError } = await supabase
+      .from('headlines')
+      .update({ score, policy_relevance, summary })
+      .eq('id', row.id);
+    if (!updateError) scored++;
+  }
+
+  const { count: remaining } = await supabase
+    .from('headlines')
+    .select('id', { count: 'exact', head: true })
+    .is('policy_relevance', null);
+
+  return NextResponse.json({
+    scored,
+    deleted,
+    remaining: remaining ?? null,
+    elapsedMs: Date.now() - start,
+    stoppedReason,
+  });
+}

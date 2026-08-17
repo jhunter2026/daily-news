@@ -23,6 +23,15 @@ const parser = new Parser({
   },
 });
 
+// Only the scoring loop is order-sensitive (it stops once time runs out), so
+// start from a different feed each day — otherwise sources late in FEEDS
+// would starve indefinitely whenever earlier ones fill the whole budget.
+function rotateFeeds(feeds, now = new Date()) {
+  const dayIndex = Math.floor(now.getTime() / 86400000);
+  const offset = dayIndex % feeds.length;
+  return [...feeds.slice(offset), ...feeds.slice(0, offset)];
+}
+
 async function fetchCandidates(feed) {
   try {
     const parsedFeed = await parser.parseURL(feed.url);
@@ -54,7 +63,8 @@ export async function GET() {
   // Fetching feeds one at a time can burn most of the 10s budget on network
   // latency alone before a single headline gets scored, so fetch + dedup +
   // relevance-filter every feed concurrently instead.
-  const fetchResults = await Promise.all(FEEDS.map(fetchCandidates));
+  const rotatedFeeds = rotateFeeds(FEEDS);
+  const fetchResults = await Promise.all(rotatedFeeds.map(fetchCandidates));
 
   const results = [];
   let timedOut = false;

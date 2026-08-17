@@ -31,6 +31,19 @@ export async function GET(request) {
     }
   }
 
+  // Read-only diagnostic: ?peek=<id> returns that row's current DB state with
+  // no writes, so we can check whether a previously-fixed row silently
+  // reverts later without spending any more Gemini calls to find out.
+  const peekId = new URL(request.url).searchParams.get('peek');
+  if (peekId) {
+    const { data: peekRow, error: peekError } = await supabase
+      .from('headlines')
+      .select('*')
+      .eq('id', peekId)
+      .single();
+    return NextResponse.json({ peekId, peekRow, peekError: peekError?.message ?? null });
+  }
+
   const start = Date.now();
 
   const { data: rows, error: fetchError } = await supabase

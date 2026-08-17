@@ -63,15 +63,17 @@ export async function GET() {
         if (alreadyScored.has(item.link)) {
         continue;
     }
-  const { score, summary } = await scoreHeadline(item.title);
-  rows.push({
-    title: item.title,
-    link: item.link,
-    source: feed.source,
-    pub_date: item.pubDate ? new Date(item.pubDate) : null,
-    score,
-    summary,
-        });
+  const { score, policy_relevance, summary } = await scoreHeadline(item.title);  
+        rows.push({
+        title: item.title,
+        link: item.link,
+        source: feed.source,
+        pub_date: item.pubDate ? new Date(item.pubDate) : null,
+        score,
+        policy_relevance,
+        summary,
+});
+        
       }
 
       const { error } = await supabase.from('headlines').upsert(rows, { onConflict: 'link' });

@@ -24,7 +24,7 @@ const categoryBySource = Object.fromEntries(FEEDS.map((f) => [f.source, f.catego
 // endpoint repeatedly (e.g. in a curl loop) until the response's `remaining`
 // hits 0. Clearing a large backlog this way will take many invocations.
 export async function GET(request) {
-  const secret = process.env.BACKFILL_SECRET;
+  const secret = process.env.CRON_SECRET;
   if (secret) {
     const url = new URL(request.url);
     const provided = request.headers.get('authorization')?.replace('Bearer ', '') || url.searchParams.get('secret');

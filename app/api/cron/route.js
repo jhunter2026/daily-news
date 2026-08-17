@@ -63,7 +63,17 @@ async function fetchCandidates(feed) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const provided =
+      request.headers.get('authorization')?.replace('Bearer ', '') ||
+      new URL(request.url).searchParams.get('secret');
+    if (provided !== secret) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+  }
+
   const start = Date.now();
 
   // Fetching feeds one at a time can burn most of the 10s budget on network

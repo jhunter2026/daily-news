@@ -13,12 +13,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Everything below is budgeted against a 10s hard wall, so each phase gets a
 // deadline rather than a headline/row count: Gemini call latency is the
-// variable that actually determines how much fits, not an item count. These
-// are only checked *between* iterations, so a single slow scoreHeadline()
-// call can still carry elapsed time past the deadline before the next check
-// — an 8s scoring deadline already produced a real FUNCTION_INVOCATION_TIMEOUT
-// on the backfill route, so both deadlines here have the same added margin.
-const SCORING_DEADLINE_MS = 6000;
+// variable that actually determines how much fits, not an item count. The
+// check only runs *between* items, so the worst case isn't SCORING_DEADLINE_MS
+// -- it's SCORING_DEADLINE_MS + one more full GEMINI_TIMEOUT_MS (3s, see
+// lib/scoring.js) for the item already in flight when the deadline was
+// crossed. A 6000+5000 combination measurably blew the 10s wall in practice;
+// 4500+3000=7500 leaves real margin, and email only gets a further ~2.5s on
+// top of that worst case.
+const SCORING_DEADLINE_MS = 4500;
 const EMAIL_ATTEMPT_DEADLINE_MS = 7500;
 
 const parser = new Parser({

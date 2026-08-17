@@ -31,6 +31,19 @@ export async function GET(request) {
     }
   }
 
+  // Read-only diagnostic: ?stats=1 reports table-wide counts with no writes,
+  // to check whether the backlog is genuinely shrinking or something else is
+  // growing it back between calls (deleted:50 was reported on consecutive
+  // calls even though remaining supposedly hadn't moved, which is impossible
+  // if remaining were accurate and stable).
+  if (new URL(request.url).searchParams.get('stats')) {
+    const [{ count: total }, { count: nullCount }] = await Promise.all([
+      supabaseAdmin.from('headlines').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('headlines').select('id', { count: 'exact', head: true }).is('policy_relevance', null),
+    ]);
+    return NextResponse.json({ total, nullCount });
+  }
+
   const start = Date.now();
 
   const { data: rows, error: fetchError } = await supabaseAdmin

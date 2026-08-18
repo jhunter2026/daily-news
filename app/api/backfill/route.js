@@ -33,6 +33,14 @@ export async function GET(request) {
     }
   }
 
+  // Read-only diagnostic: ?checkColumns=1 tries to select the new columns
+  // directly, to tell apart "column doesn't exist" from "PostgREST schema
+  // cache is just stale" without guessing.
+  if (new URL(request.url).searchParams.get('checkColumns')) {
+    const { data, error } = await supabaseAdmin.from('headlines').select('id, image_url, caption').limit(1);
+    return NextResponse.json({ ok: !error, error: error?.message ?? null, sample: data ?? null });
+  }
+
   // Read-only diagnostic: ?stats=1 reports table-wide counts with no writes,
   // to check whether the backlog is genuinely shrinking or something else is
   // growing it back between calls (deleted:50 was reported on consecutive

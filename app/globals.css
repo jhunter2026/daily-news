@@ -247,3 +247,30 @@ body {
 .empty-state {
   color: var(--text-tertiary);
 }
+
+.social-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.social-card {
+  padding: 16px;
+}
+
+.social-thumb {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.social-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 10px 0 0;
+  line-height: 1.4;
+}

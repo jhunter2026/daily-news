@@ -1,29 +1,10 @@
 import { supabase } from '../lib/supabaseClient';
-import { SCORE_THRESHOLD } from '../lib/curation';
+import { getCuratedHeadlines, scoreColor } from '../lib/curation';
 
 export const dynamic = 'force-dynamic';
 
-async function getStoredHeadlines() {
-  const { data, error } = await supabase
-    .from('headlines')
-    .select('*')
-    .gt('score', SCORE_THRESHOLD)
-    .order('score', { ascending: false })
-    .order('pub_date', { ascending: false });
-  if (error) {
-    return { data: [], error: `Error reading headlines: ${error.message}` };
-  }
-  return { data: data || [], error: null };
-}
-
-function scoreColor(score) {
-  if (score >= 8) return '#d6331f';
-  if (score >= 7) return '#e2711d';
-  return '#c98a15';
-}
-
 export default async function HomePage() {
-  const { data: headlines, error: readError } = await getStoredHeadlines();
+  const { data: headlines, error: readError } = await getCuratedHeadlines(supabase);
   const topScore = headlines.length > 0 ? Math.max(...headlines.map((h) => h.score)) : null;
   const today = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',

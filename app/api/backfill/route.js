@@ -37,7 +37,11 @@ export async function GET(request) {
   // directly, to tell apart "column doesn't exist" from "PostgREST schema
   // cache is just stale" without guessing.
   if (new URL(request.url).searchParams.get('checkColumns')) {
-    const { data, error } = await supabaseAdmin.from('headlines').select('id, image_url, caption').limit(1);
+    const { data, error } = await supabaseAdmin
+      .from('headlines')
+      .select('id, title, source, image_url, caption')
+      .order('id', { ascending: false })
+      .limit(5);
     return NextResponse.json({ ok: !error, error: error?.message ?? null, sample: data ?? null });
   }
 

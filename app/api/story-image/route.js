@@ -6,6 +6,22 @@ export const runtime = 'edge';
 
 const SIZE = 1080; // Instagram-native square (1:1)
 
+// Satori (which ImageResponse uses) has no default bold variant, so
+// fontWeight: 700/800 silently renders as regular unless real weighted font
+// data is supplied. Text-subsetted (?text=) Google Fonts requests return a
+// truetype/opentype src Satori can parse, unlike the woff2 a normal browser
+// request gets.
+async function loadGoogleFont(text, weight) {
+  const cssUrl = `https://fonts.googleapis.com/css2?family=Inter:wght@${weight}&text=${encodeURIComponent(text)}`;
+  const css = await (await fetch(cssUrl)).text();
+  const match = css.match(/src: url\(([^)]+)\) format\('(opentype|truetype)'\)/);
+  if (!match) {
+    throw new Error(`Could not find a truetype/opentype source for Inter weight ${weight}`);
+  }
+  const fontRes = await fetch(match[1]);
+  return fontRes.arrayBuffer();
+}
+
 export async function GET(request) {
   const id = new URL(request.url).searchParams.get('id');
   if (!id) {
@@ -22,6 +38,23 @@ export async function GET(request) {
     return new Response('Story not found', { status: 404 });
   }
 
+  const allText = [
+    'Daily News',
+    'WIRE',
+    item.score.toFixed(1),
+    'Breakout',
+    item.title,
+    item.summary && !item.summary.startsWith('ERROR') ? item.summary : '',
+    `BREAKOUT ${item.score}`,
+    item.policy_relevance !== null ? `POLICY ${item.policy_relevance}` : '',
+    item.source,
+  ].join(' ');
+
+  const [regular, bold] = await Promise.all([
+    loadGoogleFont(allText, 400),
+    loadGoogleFont(allText, 800),
+  ]);
+
   return new ImageResponse(
     (
       <div
@@ -32,6 +65,7 @@ export async function GET(request) {
           flexDirection: 'column',
           backgroundColor: '#ffffff',
           padding: 72,
+          fontFamily: 'Inter',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -120,6 +154,13 @@ export async function GET(request) {
         </div>
       </div>
     ),
-    { width: SIZE, height: SIZE }
+    {
+      width: SIZE,
+      height: SIZE,
+      fonts: [
+        { name: 'Inter', data: regular, weight: 400, style: 'normal' },
+        { name: 'Inter', data: bold, weight: 800, style: 'normal' },
+      ],
+    }
   );
 }

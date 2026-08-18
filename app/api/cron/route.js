@@ -27,7 +27,32 @@ const parser = new Parser({
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   },
+  // media:thumbnail/media:content aren't part of the base RSS spec, so
+  // rss-parser doesn't expose them by default -- needed for the social-image
+  // background photo, since <enclosure> (parsed by default) isn't present on
+  // every feed that does have an image.
+  customFields: {
+    item: [
+      ['media:thumbnail', 'mediaThumbnail'],
+      ['media:content', 'mediaContent'],
+    ],
+  },
 });
+
+// Not every feed exposes an image the same way -- checked in likelihood
+// order: standard <enclosure> (rss-parser's default), then the two Yahoo
+// Media RSS tags above, then a last-resort scrape of the first <img> in the
+// full article HTML some feeds embed. Returns null (not an error) if none
+// match, since plenty of feeds (Gothamist, LAist, BHA) just don't have one --
+// the image route falls back to a plain card in that case.
+function extractImageUrl(item) {
+  if (item.enclosure?.url) return item.enclosure.url;
+  if (item.mediaThumbnail?.$?.url) return item.mediaThumbnail.$.url;
+  if (item.mediaContent?.$?.url) return item.mediaContent.$.url;
+  const html = item['content:encoded'] || item.content || item.summary || '';
+  const match = typeof html === 'string' ? html.match(/<img[^>]+src=["']([^"']+)["']/i) : null;
+  return match ? match[1] : null;
+}
 
 // Only the scoring loop is order-sensitive (it stops once time runs out), so
 // start from a different feed each day — otherwise sources late in FEEDS
@@ -105,7 +130,7 @@ export async function GET(request) {
         timedOut = true;
         break;
       }
-      const { score, policy_relevance, summary } = await scoreHeadline(item.title);
+      const { score, policy_relevance, summary, caption } = await scoreHeadline(item.title);
       const { error } = await supabaseAdmin.from('headlines').upsert(
         {
           title: item.title,
@@ -115,6 +140,8 @@ export async function GET(request) {
           score,
           policy_relevance,
           summary,
+          caption,
+          image_url: extractImageUrl(item),
         },
         { onConflict: 'link' }
       );

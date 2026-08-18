@@ -38,13 +38,19 @@ export async function GET(request) {
     return new Response('Story not found', { status: 404 });
   }
 
+  // This image is shared publicly, so only public-facing text goes on it:
+  // headline, score, badges, source. item.summary ("this scores high
+  // because...") is internal editorial reasoning for the owner's email
+  // digest and never belongs here; item.caption is written for the
+  // Instagram caption field, not for baking into the image itself.
+  const hasPhoto = Boolean(item.image_url);
+
   const allText = [
     'Daily News',
     'WIRE',
     item.score.toFixed(1),
     'Breakout',
     item.title,
-    item.summary && !item.summary.startsWith('ERROR') ? item.summary : '',
     `BREAKOUT ${item.score}`,
     item.policy_relevance !== null ? `POLICY ${item.policy_relevance}` : '',
     item.source,
@@ -55,6 +61,77 @@ export async function GET(request) {
     loadGoogleFont(allText, 800),
   ]);
 
+  const textColor = hasPhoto ? '#ffffff' : '#14161a';
+  const mutedColor = hasPhoto ? 'rgba(255,255,255,0.75)' : '#9aa0a8';
+  const badgeBg = hasPhoto ? 'rgba(255,255,255,0.15)' : '#f2f3f5';
+  const badgeText = hasPhoto ? '#ffffff' : '#4b515a';
+
+  const brandRow = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div
+        style={{
+          display: 'flex',
+          fontSize: 26,
+          fontWeight: 700,
+          letterSpacing: 3,
+          color: mutedColor,
+          textTransform: 'uppercase',
+        }}
+      >
+        Daily News
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          background: '#1c3fae',
+          color: '#ffffff',
+          fontSize: 18,
+          fontWeight: 700,
+          letterSpacing: 1,
+          padding: '5px 14px',
+          borderRadius: 6,
+        }}
+      >
+        WIRE
+      </div>
+    </div>
+  );
+
+  const badgeRow = (
+    <div style={{ display: 'flex', gap: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          background: badgeBg,
+          color: badgeText,
+          fontSize: 22,
+          fontWeight: 700,
+          letterSpacing: 1,
+          padding: '10px 18px',
+          borderRadius: 10,
+        }}
+      >
+        BREAKOUT {item.score}
+      </div>
+      {item.policy_relevance !== null && (
+        <div
+          style={{
+            display: 'flex',
+            background: badgeBg,
+            color: badgeText,
+            fontSize: 22,
+            fontWeight: 700,
+            letterSpacing: 1,
+            padding: '10px 18px',
+            borderRadius: 10,
+          }}
+        >
+          POLICY {item.policy_relevance}
+        </div>
+      )}
+    </div>
+  );
+
   return new ImageResponse(
     (
       <div
@@ -62,95 +139,72 @@ export async function GET(request) {
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
+          position: 'relative',
           backgroundColor: '#ffffff',
-          padding: 72,
           fontFamily: 'Inter',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {hasPhoto && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.image_url}
+            width={SIZE}
+            height={SIZE}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        )}
+        {hasPhoto && (
           <div
             style={{
-              fontSize: 26,
-              fontWeight: 700,
-              letterSpacing: 3,
-              color: '#5b6169',
-              textTransform: 'uppercase',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
               display: 'flex',
+              backgroundImage:
+                'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.05) 65%, rgba(0,0,0,0) 100%)',
             }}
-          >
-            Daily News
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              background: '#1c3fae',
-              color: '#ffffff',
-              fontSize: 18,
-              fontWeight: 700,
-              letterSpacing: 1,
-              padding: '5px 14px',
-              borderRadius: 6,
-            }}
-          >
-            WIRE
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', marginTop: 56, gap: 36 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ display: 'flex', fontSize: 108, fontWeight: 800, lineHeight: 1, color: scoreColor(item.score) }}>
-              {item.score.toFixed(1)}
-            </div>
-            <div style={{ display: 'flex', fontSize: 22, letterSpacing: 2, color: '#9aa0a8', textTransform: 'uppercase', marginTop: 10 }}>
-              Breakout
-            </div>
-          </div>
-          <div style={{ display: 'flex', flex: 1, fontSize: 54, fontWeight: 800, lineHeight: 1.25, color: '#14161a' }}>
-            {item.title}
-          </div>
-        </div>
-
-        {item.summary && !item.summary.startsWith('ERROR') && (
-          <div style={{ display: 'flex', marginTop: 44, fontSize: 30, lineHeight: 1.5, color: '#5b6169' }}>
-            {item.summary}
-          </div>
+          />
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <div
-              style={{
-                display: 'flex',
-                background: '#f2f3f5',
-                color: '#4b515a',
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: 1,
-                padding: '10px 18px',
-                borderRadius: 10,
-              }}
-            >
-              BREAKOUT {item.score}
-            </div>
-            {item.policy_relevance !== null && (
-              <div
-                style={{
-                  display: 'flex',
-                  background: '#f2f3f5',
-                  color: '#4b515a',
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: '10px 18px',
-                  borderRadius: 10,
-                }}
-              >
-                POLICY {item.policy_relevance}
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            height: '100%',
+            padding: 72,
+          }}
+        >
+          {!hasPhoto && brandRow}
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              justifyContent: hasPhoto ? 'flex-end' : 'center',
+            }}
+          >
+            {hasPhoto && brandRow}
+            <div style={{ display: 'flex', marginTop: hasPhoto ? 32 : 0, gap: 36, alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ display: 'flex', fontSize: 108, fontWeight: 800, lineHeight: 1, color: scoreColor(item.score) }}>
+                  {item.score.toFixed(1)}
+                </div>
+                <div style={{ display: 'flex', fontSize: 22, letterSpacing: 2, color: mutedColor, textTransform: 'uppercase', marginTop: 10 }}>
+                  Breakout
+                </div>
               </div>
-            )}
+              <div style={{ display: 'flex', flex: 1, fontSize: 54, fontWeight: 800, lineHeight: 1.25, color: textColor }}>
+                {item.title}
+              </div>
+            </div>
+            <div style={{ display: 'flex', marginTop: 32 }}>{badgeRow}</div>
+            <div style={{ display: 'flex', fontSize: 26, color: mutedColor, marginTop: 26 }}>{item.source}</div>
           </div>
-          <div style={{ display: 'flex', fontSize: 26, color: '#9aa0a8', marginTop: 26 }}>{item.source}</div>
         </div>
       </div>
     ),

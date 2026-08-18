@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabaseClient';
 import { getCuratedHeadlines } from '../../lib/curation';
+import CopyCaptionButton from './CopyCaptionButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,12 @@ export default async function SocialPage() {
             <a href={`/api/story-image?id=${item.id}`} download={`story-${item.id}.png`} className="story-link">
               Download →
             </a>
+            {item.caption && (
+              <>
+                <textarea readOnly className="caption-box" value={item.caption} />
+                <CopyCaptionButton caption={item.caption} />
+              </>
+            )}
           </div>
         ))}
       </div>

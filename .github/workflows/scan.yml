@@ -1,0 +1,21 @@
+name: Scan for new headlines
+
+# Vercel's own Cron only fires a given schedule once a day on the Hobby
+# plan, but we want fresh headlines checked throughout the day -- so this
+# runs from GitHub Actions instead (free, and we already have the repo).
+# GitHub does not guarantee scheduled workflows fire at the exact minute
+# (it can be delayed, especially under high platform load), so treat "every
+# 20 minutes" as "roughly every 20-30 minutes."
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /api/scan
+        run: |
+          curl -sf -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://daily-news-m8ym-six.vercel.app/api/scan

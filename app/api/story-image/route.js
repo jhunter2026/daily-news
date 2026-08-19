@@ -53,6 +53,7 @@ export async function GET(request) {
     item.title,
     `BREAKOUT ${item.score}`,
     item.policy_relevance !== null ? `POLICY ${item.policy_relevance}` : '',
+    item.urgency_score !== null ? `URGENT ${item.urgency_score}` : '',
     item.source,
   ].join(' ');
 
@@ -97,38 +98,22 @@ export async function GET(request) {
     </div>
   );
 
+  const badgeStyle = {
+    display: 'flex',
+    background: badgeBg,
+    color: badgeText,
+    fontSize: 22,
+    fontWeight: 700,
+    letterSpacing: 1,
+    padding: '10px 18px',
+    borderRadius: 10,
+  };
+
   const badgeRow = (
     <div style={{ display: 'flex', gap: 16 }}>
-      <div
-        style={{
-          display: 'flex',
-          background: badgeBg,
-          color: badgeText,
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: 1,
-          padding: '10px 18px',
-          borderRadius: 10,
-        }}
-      >
-        BREAKOUT {item.score}
-      </div>
-      {item.policy_relevance !== null && (
-        <div
-          style={{
-            display: 'flex',
-            background: badgeBg,
-            color: badgeText,
-            fontSize: 22,
-            fontWeight: 700,
-            letterSpacing: 1,
-            padding: '10px 18px',
-            borderRadius: 10,
-          }}
-        >
-          POLICY {item.policy_relevance}
-        </div>
-      )}
+      <div style={badgeStyle}>BREAKOUT {item.score}</div>
+      {item.policy_relevance !== null && <div style={badgeStyle}>POLICY {item.policy_relevance}</div>}
+      {item.urgency_score !== null && <div style={badgeStyle}>URGENT {item.urgency_score}</div>}
     </div>
   );
 

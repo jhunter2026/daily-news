@@ -138,10 +138,10 @@ export async function GET(request) {
       continue;
     }
 
-    const { score, policy_relevance, summary, caption } = await scoreHeadline(row.title);
+    const { score, policy_relevance, urgency_score, summary, caption } = await scoreHeadline(row.title);
     const { data: updatedRows, error: updateError } = await supabaseAdmin
       .from('headlines')
-      .update({ score, policy_relevance, summary, caption })
+      .update({ score, policy_relevance, urgency_score, summary, caption })
       .eq('id', row.id)
       .select('id');
     if (updateError) continue;

@@ -79,6 +79,9 @@ export default async function HomePage() {
                   {item.policy_relevance !== null && (
                     <span className="badge">Policy {item.policy_relevance}</span>
                   )}
+                  {item.urgency_score !== null && (
+                    <span className="badge">Urgent {item.urgency_score}</span>
+                  )}
                 </div>
                 <div className="story-meta">
                   <span>{item.source}</span>

@@ -130,7 +130,7 @@ export async function GET(request) {
         timedOut = true;
         break;
       }
-      const { score, policy_relevance, summary, caption } = await scoreHeadline(item.title);
+      const { score, policy_relevance, urgency_score, summary, caption } = await scoreHeadline(item.title);
       const { error } = await supabaseAdmin.from('headlines').upsert(
         {
           title: item.title,
@@ -139,6 +139,7 @@ export async function GET(request) {
           pub_date: item.pubDate ? new Date(item.pubDate) : null,
           score,
           policy_relevance,
+          urgency_score,
           summary,
           caption,
           image_url: extractImageUrl(item),
@@ -178,7 +179,7 @@ export async function GET(request) {
       const htmlList = emailHeadlines
         .map(
           (item) =>
-            `<li style="margin-bottom:16px;"><a href="${item.link}" style="font-size:16px;color:#111;font-weight:600;text-decoration:none;">${item.title}</a><br/><span style="color:#666;font-size:13px;">${item.source}${item.score ? ` · Score: ${item.score}/10` : ''}</span>${item.summary ? `<br/><span style="color:#444;font-size:14px;">${item.summary}</span>` : ''}</li>`
+            `<li style="margin-bottom:16px;"><a href="${item.link}" style="font-size:16px;color:#111;font-weight:600;text-decoration:none;">${item.title}</a><br/><span style="color:#666;font-size:13px;">${item.source}${item.score ? ` · Score: ${item.score}/10` : ''}${item.urgency_score !== null ? ` · Urgency: ${item.urgency_score}/10` : ''}</span>${item.summary ? `<br/><span style="color:#444;font-size:14px;">${item.summary}</span>` : ''}</li>`
         )
         .join('');
 

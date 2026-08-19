@@ -306,3 +306,99 @@ body {
 .copy-caption-btn:hover {
   text-decoration: underline;
 }
+
+.dashboard-card {
+  padding: 20px 24px 24px;
+  margin-top: 16px;
+}
+
+.dashboard-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dashboard-controls select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-primary);
+}
+
+.dashboard-count {
+  color: var(--text-tertiary);
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.dashboard-table th {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+
+.dashboard-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dashboard-table th.sortable:hover {
+  color: var(--text-primary);
+}
+
+.dashboard-table tbody tr:hover {
+  background: var(--badge-bg);
+}
+
+.dashboard-headline-cell {
+  white-space: normal;
+  max-width: 420px;
+}
+
+.dashboard-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.dashboard-thumb-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--badge-bg);
+}
+
+.dashboard-error-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #9a2c25;
+  background: #fdf1f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

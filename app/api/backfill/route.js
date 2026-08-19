@@ -39,7 +39,7 @@ export async function GET(request) {
   if (new URL(request.url).searchParams.get('checkColumns')) {
     const { data, error } = await supabaseAdmin
       .from('headlines')
-      .select('id, title, source, image_url, caption')
+      .select('id, title, source, score, urgency_score, image_url, caption')
       .order('id', { ascending: false })
       .limit(5);
     return NextResponse.json({ ok: !error, error: error?.message ?? null, sample: data ?? null });

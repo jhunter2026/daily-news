@@ -3,12 +3,22 @@ name: Scan for new headlines
 # Vercel's own Cron only fires a given schedule once a day on the Hobby
 # plan, but we want fresh headlines checked throughout the day -- so this
 # runs from GitHub Actions instead (free, and we already have the repo).
-# GitHub does not guarantee scheduled workflows fire at the exact minute
-# (it can be delayed, especially under high platform load), so treat "every
-# 20 minutes" as "roughly every 20-30 minutes."
+#
+# Originally set to */20 (every 20 min), but GitHub's scheduler silently
+# throttled that down to roughly once an hour in practice on this repo --
+# a known GitHub Actions limitation for sub-hourly schedules, not a config
+# mistake. Every 2 hours is well above whatever threshold that throttling
+# kicks in at, so this should fire reliably close to on-schedule.
+#
+# Times below are 15:00/17:00/19:00/21:00/23:00/01:00 UTC, chosen to land on
+# 8am/10am/noon/2pm/4pm/6pm Pacific *during Pacific Daylight Time (UTC-7)*.
+# When the US switches to Pacific Standard Time (UTC-8) in November, these
+# will drift an hour later on the wall clock (e.g. 8am PDT becomes 9am PST)
+# -- shift every value here back by 1 to compensate, or forward by 1 each
+# spring when DST resumes.
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '0 15,17,19,21,23,1 * * *'
   workflow_dispatch: {}
 
 jobs:

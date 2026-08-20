@@ -371,8 +371,20 @@ body {
 }
 
 .dashboard-headline-cell {
-  white-space: normal;
-  max-width: 420px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.dashboard-source-cell {
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.dashboard-date {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
 }
 
 .dashboard-thumb {

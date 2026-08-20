@@ -74,9 +74,8 @@ export default function DashboardTable({ headlines }) {
                 Policy{sortIndicator('policy')}
               </th>
               <th>Headline</th>
-              <th>Source</th>
               <th className="sortable" onClick={() => toggleSort('date')}>
-                Published{sortIndicator('date')}
+                Source / Date{sortIndicator('date')}
               </th>
             </tr>
           </thead>
@@ -97,15 +96,19 @@ export default function DashboardTable({ headlines }) {
                 <td>{item.urgency_score ?? '—'}</td>
                 <td>{item.policy_relevance ?? '—'}</td>
                 <td className="dashboard-headline-cell">
-                  <a href={item.link} target="_blank" rel="noopener noreferrer">
+                  <a href={item.link} target="_blank" rel="noopener noreferrer" title={item.title}>
                     {item.title}
                   </a>
                   {item.summary && item.summary.startsWith('ERROR') && (
                     <span className="dashboard-error-tag">scoring failed</span>
                   )}
                 </td>
-                <td>{item.source}</td>
-                <td>{item.pub_date ? new Date(item.pub_date).toLocaleString() : '—'}</td>
+                <td className="dashboard-source-cell">
+                  <div>{item.source}</div>
+                  <div className="dashboard-date">
+                    {item.pub_date ? new Date(item.pub_date).toLocaleDateString() : '—'}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

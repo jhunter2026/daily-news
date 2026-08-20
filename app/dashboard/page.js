@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabaseClient';
-import { getRecentHeadlines, RECENCY_WINDOW_HOURS } from '../../lib/curation';
+import { getRecentHeadlines, DASHBOARD_WINDOW_DAYS } from '../../lib/curation';
 import DashboardTable from './DashboardTable';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export default async function DashboardPage() {
         </div>
         <div className="masthead-date">Dashboard</div>
         <div className="masthead-subtitle">
-          Every story scored in the last {RECENCY_WINDOW_HOURS} hours — including ones that didn&apos;t make the public cut.
+          Every story scored in the last {DASHBOARD_WINDOW_DAYS} days, grouped by day — including ones that didn&apos;t make the public cut.
         </div>
         <div className="masthead-rule" />
       </header>
